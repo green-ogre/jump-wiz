@@ -1,8 +1,6 @@
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use leafwing_input_manager::prelude::*;
 
-use super::Player;
-
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 #[non_exhaustive]
 pub enum PlayerActionTopDown {
