@@ -1,21 +1,59 @@
 use avian2d::{math::*, prelude::*};
-use bevy::prelude::*;
-use leafwing_input_manager::prelude::*;
+use bevy::{ecs::query::Has, prelude::*};
+use leafwing_input_manager::action_state::ActionState;
 
-use super::{input::PlayerAction, Player};
+use super::{input::PlayerActionSidescroller, Player};
 
 pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, movement);
-        // .add_plugins(PhysicsDebugPlugin::default());
+        app.add_event::<MovementAction>().add_systems(
+            Update,
+            (
+                keyboard_input,
+                gamepad_input,
+                update_grounded,
+                movement,
+                apply_movement_damping,
+            )
+                .chain(),
+        );
     }
+}
+
+/// An event sent for a movement input action.
+#[derive(Event)]
+pub enum MovementAction {
+    Move(Scalar),
+    Jump,
 }
 
 /// A marker component indicating that an entity is using a character controller.
 #[derive(Component)]
 pub struct CharacterController;
+
+/// A marker component indicating that an entity is on the ground.
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct Grounded;
+/// The acceleration used for character movement.
+#[derive(Component)]
+pub struct MovementAcceleration(Scalar);
+
+/// The damping factor used for slowing down movement.
+#[derive(Component)]
+pub struct MovementDampingFactor(Scalar);
+
+/// The strength of a jump.
+#[derive(Component)]
+pub struct JumpImpulse(Scalar);
+
+/// The maximum angle a slope can have for a character controller
+/// to be able to climb and jump. If the slope is steeper than this angle,
+/// the character will slide down.
+#[derive(Component)]
+pub struct MaxSlopeAngle(Scalar);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
@@ -26,45 +64,204 @@ pub struct CharacterControllerBundle {
     collider: Collider,
     ground_caster: ShapeCaster,
     locked_axes: LockedAxes,
-    friction: Friction,
+    movement: MovementBundle,
+    restitution: Restitution,
+}
+
+/// A bundle that contains components for character movement.
+#[derive(Bundle)]
+pub struct MovementBundle {
+    acceleration: MovementAcceleration,
+    damping: MovementDampingFactor,
+    jump_impulse: JumpImpulse,
+    max_slope_angle: MaxSlopeAngle,
+}
+
+impl MovementBundle {
+    pub const fn new(
+        acceleration: Scalar,
+        damping: Scalar,
+        jump_impulse: Scalar,
+        max_slope_angle: Scalar,
+    ) -> Self {
+        Self {
+            acceleration: MovementAcceleration(acceleration),
+            damping: MovementDampingFactor(damping),
+            jump_impulse: JumpImpulse(jump_impulse),
+            max_slope_angle: MaxSlopeAngle(max_slope_angle),
+        }
+    }
+}
+
+impl Default for MovementBundle {
+    fn default() -> Self {
+        Self::new(2f32.powi(14), 0.9, 2048., PI * 0.45)
+    }
 }
 
 impl CharacterControllerBundle {
-    pub fn new() -> Self {
-        let collider = Collider::circle(3.);
+    pub fn new(collider: Collider) -> Self {
+        // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.95, 5);
+        caster_shape.set_scale(Vector::ONE * 0.99, 10);
 
         Self {
             character_controller: CharacterController,
             rigid_body: RigidBody::Dynamic,
             collider,
-            ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0., Dir2::NEG_Y)
-                .with_max_time_of_impact(0.2),
+            ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0.0, Dir2::NEG_Y)
+                .with_max_time_of_impact(10.0),
             locked_axes: LockedAxes::ROTATION_LOCKED,
-            friction: Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+            movement: MovementBundle::default(),
+            restitution: Restitution::PERFECTLY_INELASTIC
+                .with_combine_rule(CoefficientCombine::Min),
+        }
+    }
+
+    pub fn with_movement(
+        mut self,
+        acceleration: Scalar,
+        damping: Scalar,
+        jump_impulse: Scalar,
+        max_slope_angle: Scalar,
+    ) -> Self {
+        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
+        self
+    }
+}
+
+/// Sends [`MovementAction`] events based on keyboard input.
+fn keyboard_input(
+    mut movement_event_writer: EventWriter<MovementAction>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+    let left = keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
+    let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
+
+    let horizontal = right as i8 - left as i8;
+    let direction = horizontal as Scalar;
+
+    if direction != 0.0 {
+        movement_event_writer.send(MovementAction::Move(direction));
+    }
+
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        movement_event_writer.send(MovementAction::Jump);
+    }
+}
+
+/// Sends [`MovementAction`] events based on gamepad input.
+fn gamepad_input(
+    mut movement_event_writer: EventWriter<MovementAction>,
+    gamepads: Res<Gamepads>,
+    axes: Res<Axis<GamepadAxis>>,
+    buttons: Res<ButtonInput<GamepadButton>>,
+) {
+    for gamepad in gamepads.iter() {
+        let axis_lx = GamepadAxis {
+            gamepad,
+            axis_type: GamepadAxisType::LeftStickX,
+        };
+
+        if let Some(x) = axes.get(axis_lx) {
+            movement_event_writer.send(MovementAction::Move(x as Scalar));
+        }
+
+        let jump_button = GamepadButton {
+            gamepad,
+            button_type: GamepadButtonType::South,
+        };
+
+        if buttons.just_pressed(jump_button) {
+            movement_event_writer.send(MovementAction::Jump);
+        }
+    }
+}
+
+/// Updates the [`Grounded`] status for character controllers.
+fn update_grounded(
+    mut commands: Commands,
+    mut query: Query<
+        (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
+        With<CharacterController>,
+    >,
+) {
+    for (entity, hits, rotation, max_slope_angle) in &mut query {
+        // The character is grounded if the shape caster has a hit with a normal
+        // that isn't too steep.
+        let is_grounded = hits.iter().any(|hit| {
+            if let Some(angle) = max_slope_angle {
+                (rotation * -hit.normal2).angle_between(Vector::Y).abs() <= angle.0
+            } else {
+                true
+            }
+        });
+
+        if is_grounded {
+            commands.entity(entity).insert(Grounded);
+        } else {
+            commands.entity(entity).remove::<Grounded>();
         }
     }
 }
 
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
-    action: Query<&ActionState<PlayerAction>, With<Player>>,
-    mut controllers: Query<(&mut LinearVelocity,), With<CharacterController>>,
+    time: Res<Time>,
+    // mut movement_event_reader: EventReader<MovementAction>,
+    action: Query<&ActionState<PlayerActionSidescroller>, With<Player>>,
+    mut controllers: Query<(
+        &MovementAcceleration,
+        &JumpImpulse,
+        &mut LinearVelocity,
+        Has<Grounded>,
+    )>,
 ) {
-    let Some(action) = action.iter().next() else {
+    let Ok(action) = action.get_single() else {
         return;
     };
+    let delta_time = time.delta_seconds();
 
-    let pair = action.clamped_axis_pair(&PlayerAction::Move);
-    let cleaned = if pair.length_squared() > 0.2 {
-        pair.normalize_or_zero() * 100.
-    } else {
-        Vec2::default()
-    };
+    for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in &mut controllers
+    {
+        if is_grounded {
+            if action.just_pressed(&PlayerActionSidescroller::Jump) {
+                linear_velocity.y = jump_impulse.0;
+            }
+        }
 
-    for (mut velocity,) in controllers.iter_mut() {
-        velocity.x = cleaned.x;
-        velocity.y = cleaned.y;
+        let value = action.axis_data(&PlayerActionSidescroller::Move).unwrap();
+        if value.value > 0.2 {
+            linear_velocity.x = 1024.;
+        } else if value.value < -0.2 {
+            linear_velocity.x = -1024.;
+        } else if is_grounded {
+            linear_velocity.x = 0.;
+        }
+    }
+
+    // for event in movement_event_reader.read() {
+    //     for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
+    //         &mut controllers
+    //     {
+    //         match event {
+    //             MovementAction::Move(direction) => {
+    //                 linear_velocity.x += *direction * movement_acceleration.0 * delta_time;
+    //             }
+    //             MovementAction::Jump => {
+    //                 if is_grounded {
+    //                     linear_velocity.y = jump_impulse.0;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+}
+
+/// Slows down movement in the X direction.
+fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
+    for (damping_factor, mut linear_velocity) in &mut query {
+        // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
+        linear_velocity.x *= damping_factor.0;
     }
 }

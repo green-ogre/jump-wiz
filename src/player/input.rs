@@ -1,23 +1,23 @@
-use bevy::prelude::*;
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use leafwing_input_manager::prelude::*;
 
 use super::Player;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 #[non_exhaustive]
-pub enum PlayerAction {
+pub enum PlayerActionTopDown {
     Move,
 }
 
-impl Actionlike for PlayerAction {
+impl Actionlike for PlayerActionTopDown {
     fn input_control_kind(&self) -> InputControlKind {
         match self {
-            PlayerAction::Move => InputControlKind::DualAxis,
+            Self::Move => InputControlKind::DualAxis,
         }
     }
 }
 
-impl PlayerAction {
+impl PlayerActionTopDown {
     pub fn default_input_map() -> InputMap<Self> {
         let mut input_map = InputMap::default();
 
@@ -29,10 +29,33 @@ impl PlayerAction {
     }
 }
 
-pub fn handle_actions(query: Query<&ActionState<PlayerAction>, With<Player>>) {
-    let Some(action) = query.iter().next() else {
-        return;
-    };
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
+#[non_exhaustive]
+pub enum PlayerActionSidescroller {
+    Move,
+    Jump,
+}
 
-    // todo
+impl Actionlike for PlayerActionSidescroller {
+    fn input_control_kind(&self) -> InputControlKind {
+        match self {
+            Self::Move => InputControlKind::Axis,
+            _ => InputControlKind::Button,
+        }
+    }
+}
+
+impl PlayerActionSidescroller {
+    pub fn default_input_map() -> InputMap<Self> {
+        let mut input_map = InputMap::default();
+
+        // Default gamepad and keyboard input bindings
+        input_map.insert_axis(Self::Move, GamepadControlAxis::LEFT_X);
+        input_map.insert_axis(Self::Move, KeyboardVirtualAxis::AD);
+
+        input_map.insert(Self::Jump, KeyCode::Space);
+        input_map.insert(Self::Jump, GamepadButtonType::South);
+
+        input_map
+    }
 }

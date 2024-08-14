@@ -1,5 +1,9 @@
-use avian2d::schedule::PostProcessCollisions;
-use bevy::prelude::*;
+use avian2d::{
+    collision::Collider,
+    dynamics::rigid_body::{GravityScale, RigidBody},
+    schedule::PhysicsSet,
+};
+use bevy::{math::VectorSpace, prelude::*};
 use leafwing_input_manager::prelude::*;
 
 mod input;
@@ -10,12 +14,16 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            InputManagerPlugin::<input::PlayerAction>::default(),
+            InputManagerPlugin::<input::PlayerActionSidescroller>::default(),
             movement::CharacterControllerPlugin,
         ))
         .add_systems(Startup, spawn_player)
-        .add_systems(Update, (input::handle_actions,))
-        .add_systems(PostProcessCollisions, follow_player);
+        .add_systems(
+            PostUpdate,
+            follow_player
+                .after(PhysicsSet::Sync)
+                .before(TransformSystem::TransformPropagate),
+        );
     }
 }
 
@@ -23,21 +31,25 @@ impl Plugin for PlayerPlugin {
 pub struct Player;
 
 fn spawn_player(mut commands: Commands, server: Res<AssetServer>) {
-    let texture = server.load("textures/smile.png");
+    let texture = server.load(
+        "mossy_caves/BlueWizard Animations/BlueWizard/2BlueWizardIdle/Chara - BlueIdle00000.png",
+    );
 
     commands.spawn((
         Player,
-        movement::CharacterControllerBundle::new(),
+        movement::CharacterControllerBundle::new(Collider::circle(128.)),
         SpriteBundle {
-            transform: Transform::from_translation(Vec3::new(
-                -6.5 * 16. * 3. - 1.,
-                -6.5 * 16. * 3. - 1.,
-                100.,
-            )),
+            transform: Transform::from_translation(Vec3::new(0., 512., 100.)),
             texture,
             ..Default::default()
         },
-        InputManagerBundle::with_map(input::PlayerAction::default_input_map()),
+        InputManagerBundle::with_map(input::PlayerActionSidescroller::default_input_map()),
+    ));
+
+    commands.spawn((
+        RigidBody::Static,
+        // GravityScale(0.),
+        Collider::rectangle(512., 512.),
     ));
 }
 
@@ -50,5 +62,4 @@ fn follow_player(
     };
 
     camera.translation = player.translation;
-    camera.scale = Vec3::new(0.15, 0.15, 1.);
 }

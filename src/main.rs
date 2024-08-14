@@ -1,3 +1,4 @@
+use avian2d::{debug_render::PhysicsDebugPlugin, dynamics::integrator::Gravity, PhysicsPlugins};
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
@@ -5,27 +6,35 @@ use bevy::{
 };
 use bevy_ecs_ldtk::prelude::*;
 
+use player::PlayerPlugin;
+
+pub mod animated_sprites;
+pub mod player;
+
 const WINDOW_SIZE: f32 = 1000.0;
 const TILE_SIZE: f32 = 512.0;
 const TILE_MAP_SIZE: f32 = 16.0;
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(ImagePlugin::default_nearest())
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        resolution: WindowResolution::new(WINDOW_SIZE, WINDOW_SIZE),
-                        ..Default::default()
-                    }),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "jump wiz".into(),
+                    resolution: WindowResolution::new(WINDOW_SIZE, WINDOW_SIZE),
                     ..Default::default()
                 }),
-        )
-        .add_plugins(LdtkPlugin)
+                ..Default::default()
+            }),
+            PhysicsPlugins::default(),
+            PlayerPlugin,
+            PhysicsDebugPlugin::default(),
+            LdtkPlugin,
+        ))
         .add_systems(Startup, setup)
         .add_systems(Update, close_on_escape)
         .insert_resource(LevelSelection::index(0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 2048.))
         .run();
 }
 
