@@ -68,15 +68,17 @@ struct PlayerBundle {
     player: Player,
     movement: CharacterControllerBundle,
     input: InputManagerBundle<PlayerActionSidescroller>,
+    juice: player::JuiceMeter,
 }
 
 impl Default for PlayerBundle {
     fn default() -> Self {
         Self {
             player: Player,
-            movement: CharacterControllerBundle::default(),
             input: InputManagerBundle::with_map(PlayerActionSidescroller::default_input_map()),
             sprite_sheet_bundle: LdtkSpriteSheetBundle::default(),
+            movement: CharacterControllerBundle::default(),
+            juice: Default::default(),
         }
     }
 }

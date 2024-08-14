@@ -1,4 +1,4 @@
-use super::{input::PlayerActionSidescroller, Player};
+use super::{input::PlayerActionSidescroller, JuiceMeter, Player};
 use crate::GRAVITY;
 use avian2d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
@@ -10,7 +10,7 @@ impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedPreUpdate,
-            (update_grounded, movement)
+            (update_grounded, movement, handle_jump)
                 .chain()
                 .before(PhysicsSet::Prepare)
                 .before(PhysicsSet::StepSimulation),
@@ -156,33 +156,19 @@ fn update_grounded(
 fn movement(
     action: Query<&ActionState<PlayerActionSidescroller>, With<Player>>,
     mut controllers: Query<(
-        Entity,
         &MovementSpeed,
-        &JumpImpulse,
         &mut LinearVelocity,
         &mut LastDirection,
         &mut Transform,
         Has<Grounded>,
     )>,
-    mut commands: Commands,
 ) {
-    let action = match action.get_single() {
-        Ok(action) => action,
-        Err(e) => {
-            warn!("Error moving player: {e:?}");
-            return;
-        }
+    let Ok(action) = action.get_single() else {
+        return;
     };
 
-    for (
-        entity,
-        speed,
-        jump_impulse,
-        mut linear_velocity,
-        mut last_direction,
-        mut transform,
-        is_grounded,
-    ) in &mut controllers
+    for (speed, mut linear_velocity, mut last_direction, mut transform, is_grounded) in
+        &mut controllers
     {
         let value = action.axis_data(&PlayerActionSidescroller::Move).unwrap();
 
@@ -200,13 +186,68 @@ fn movement(
 
             linear_velocity.y = linear_velocity.y.max(0.);
         }
+    }
+}
 
-        if is_grounded {
-            if action.just_pressed(&PlayerActionSidescroller::Jump) {
-                linear_velocity.x = jump_impulse.0 * last_direction.0 * 0.5;
-                linear_velocity.y = jump_impulse.0;
-                transform.translation.y += 10.;
+fn handle_jump(
+    action: Query<&ActionState<PlayerActionSidescroller>, With<Player>>,
+    mut controllers: Query<(
+        &JumpImpulse,
+        &mut LinearVelocity,
+        &mut LastDirection,
+        &mut Transform,
+        &mut JuiceMeter,
+        Has<Grounded>,
+    )>,
+    time: Res<Time>,
+) {
+    let Ok(action) = action.get_single() else {
+        return;
+    };
+
+    for (
+        jump_impulse,
+        mut linear_velocity,
+        last_direction,
+        mut transform,
+        mut juice,
+        is_grounded,
+    ) in &mut controllers
+    {
+        match *juice {
+            JuiceMeter::Idle => {
+                if is_grounded && action.just_pressed(&PlayerActionSidescroller::Jump) {
+                    *juice = JuiceMeter::Charging(0.);
+                }
             }
-        }
+            JuiceMeter::Charging(charge) => {
+                let charge = charge + time.delta_seconds();
+
+                let released = action.just_released(&PlayerActionSidescroller::Jump);
+                let overcharged = charge >= 3.;
+
+                if released {
+                    *juice = JuiceMeter::Idle;
+                } else if overcharged {
+                    *juice = JuiceMeter::Exhausted;
+                } else {
+                    *juice = JuiceMeter::Charging(charge);
+                }
+
+                if charge >= 0.15 && (released || overcharged) {
+                    if is_grounded {
+                        linear_velocity.x =
+                            jump_impulse.0 * last_direction.0 * 0.5 * (0.1 + charge);
+                        linear_velocity.y = jump_impulse.0 * (0.1 + charge);
+                        transform.translation.y += 20.;
+                    }
+                }
+            }
+            JuiceMeter::Exhausted => {
+                if action.just_released(&PlayerActionSidescroller::Jump) {
+                    *juice = JuiceMeter::Idle;
+                }
+            }
+        };
     }
 }
