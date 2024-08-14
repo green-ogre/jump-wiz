@@ -1,13 +1,10 @@
-use avian2d::{
-    collision::Collider,
-    dynamics::rigid_body::{GravityScale, RigidBody},
-    schedule::PhysicsSet,
-};
+use avian2d::{collision::Collider, dynamics::rigid_body::RigidBody, schedule::PhysicsSet};
 use bevy::{math::VectorSpace, prelude::*};
 use leafwing_input_manager::prelude::*;
 
 pub mod input;
 pub mod movement;
+use self::movement::LastDirection;
 
 pub struct PlayerPlugin;
 
@@ -17,7 +14,8 @@ impl Plugin for PlayerPlugin {
             InputManagerPlugin::<input::PlayerActionSidescroller>::default(),
             movement::CharacterControllerPlugin,
         ))
-        .add_systems(Startup, spawn_player);
+        // .add_systems(Startup, spawn_player)
+        .add_systems(PostUpdate, set_player_direction);
         // .add_systems(
         //     PostUpdate,
         //     follow_player
@@ -39,7 +37,7 @@ fn spawn_player(mut commands: Commands, server: Res<AssetServer>) {
     //     Player,
     //     movement::CharacterControllerBundle::new(Collider::circle(128.)),
     //     SpriteBundle {
-    //         transform: Transform::from_translation(Vec3::new(0., 512., 100.)),
+    //         transform: Transform::from_translation(Vec3::new(256., 700., 100.)),
     //         texture,
     //         ..Default::default()
     //     },
@@ -48,8 +46,8 @@ fn spawn_player(mut commands: Commands, server: Res<AssetServer>) {
     //
     // commands.spawn((
     //     RigidBody::Static,
-    //     // GravityScale(0.),
-    //     Collider::rectangle(512., 512.),
+    //     Collider::rectangle(512. * 16., 512.),
+    //     Transform::from_translation(Vec3::new(256., 256., 0.)),
     // ));
 }
 
@@ -61,5 +59,13 @@ fn follow_player(
         return;
     };
 
-    camera.translation = player.translation;
+    // camera.translation = player.translation;
+}
+
+fn set_player_direction(mut player: Query<(&mut Transform, &LastDirection), With<Player>>) {
+    let Ok((mut transform, last_direction)) = player.get_single_mut() else {
+        return;
+    };
+
+    transform.scale.x = last_direction.0;
 }

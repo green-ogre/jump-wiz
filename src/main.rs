@@ -45,7 +45,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, (close_on_escape, init_added_collision))
         .insert_resource(LevelSelection::index(0))
-        .insert_resource(Gravity(Vec2::NEG_Y * 2048.))
+        .insert_resource(Gravity(Vec2::NEG_Y * 8192.))
         .run();
 }
 
