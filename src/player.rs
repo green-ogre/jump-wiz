@@ -27,6 +27,14 @@ impl Plugin for PlayerPlugin {
 #[derive(Component, Default)]
 pub struct Player;
 
+#[derive(Component, Default)]
+pub enum JuiceMeter {
+    #[default]
+    Idle,
+    Charging(f32),
+    Exhausted,
+}
+
 fn spawn_player(mut commands: Commands, server: Res<AssetServer>) {
     // let texture = server.load(
     //     "mossy_caves/BlueWizard Animations/BlueWizard/2BlueWizardIdle/Chara - BlueIdle00000.png",
