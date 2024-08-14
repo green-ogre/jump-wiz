@@ -183,7 +183,7 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
 fn setup_effect(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
     // Define a color gradient from red to transparent black
     let mut gradient = Gradient::new();
-    gradient.add_key(0.0, Vec4::new(1., 0., 0., 1.));
+    gradient.add_key(0.0, Vec4::new(0., 0.8, 0.2, 1.));
     gradient.add_key(1.0, Vec4::splat(0.));
 
     // Create a new expression module
@@ -193,18 +193,20 @@ fn setup_effect(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>
     // to be over the surface of a sphere of radius 2 units.
     let init_pos = SetPositionSphereModifier {
         center: module.lit(Vec3::ZERO),
-        radius: module.lit(0.05),
+        radius: module.lit(500.),
         dimension: ShapeDimension::Surface,
     };
 
     // Also initialize a radial initial velocity to 6 units/sec
     // away from the (same) sphere center.
     let init_vel = SetVelocitySphereModifier {
-        center: module.lit(Vec3::ZERO),
-        speed: module.lit(6.),
+        center: module.lit(Vec3::new(-20., -20., 0.)),
+        speed: module.lit(20.),
     };
 
-    let init_size = SetSizeModifier::default();
+    let init_size = SetSizeModifier {
+        size: CpuValue::Uniform((Vec2::splat(2.), Vec2::splat(8.))),
+    };
 
     // Initialize the total lifetime of the particle, that is
     // the time for which it's simulated and rendered. This modifier
@@ -213,7 +215,7 @@ fn setup_effect(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     // Every frame, add a gravity-like acceleration downward
-    let accel = module.lit(Vec3::new(0., -3., 0.));
+    let accel = module.lit(Vec3::new(0., 0., 0.));
     let update_accel = AccelModifier::new(accel);
 
     // Create the effect asset
