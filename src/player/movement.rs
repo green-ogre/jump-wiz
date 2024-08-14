@@ -68,6 +68,12 @@ pub struct CharacterControllerBundle {
     restitution: Restitution,
 }
 
+impl Default for CharacterControllerBundle {
+    fn default() -> Self {
+        Self::new(Collider::circle(128.))
+    }
+}
+
 /// A bundle that contains components for character movement.
 #[derive(Bundle)]
 pub struct MovementBundle {

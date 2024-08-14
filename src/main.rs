@@ -1,4 +1,9 @@
-use avian2d::{debug_render::PhysicsDebugPlugin, dynamics::integrator::Gravity, PhysicsPlugins};
+use avian2d::{
+    collision::Collider,
+    debug_render::PhysicsDebugPlugin,
+    dynamics::{integrator::Gravity, rigid_body::RigidBody},
+    PhysicsPlugins,
+};
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
@@ -6,7 +11,10 @@ use bevy::{
 };
 use bevy_ecs_ldtk::prelude::*;
 
-use player::PlayerPlugin;
+use leafwing_input_manager::InputManagerBundle;
+use player::{
+    input::PlayerActionSidescroller, movement::CharacterControllerBundle, Player, PlayerPlugin,
+};
 
 pub mod animated_sprites;
 pub mod player;
@@ -41,10 +49,24 @@ fn main() {
         .run();
 }
 
-#[derive(Default, Bundle, LdtkEntity)]
+#[derive(Bundle, LdtkEntity)]
 struct PlayerBundle {
     #[sprite_sheet_bundle]
     sprite_sheet_bundle: LdtkSpriteSheetBundle,
+    player: Player,
+    movement: CharacterControllerBundle,
+    input: InputManagerBundle<PlayerActionSidescroller>,
+}
+
+impl Default for PlayerBundle {
+    fn default() -> Self {
+        Self {
+            player: Player,
+            movement: CharacterControllerBundle::default(),
+            input: InputManagerBundle::with_map(PlayerActionSidescroller::default_input_map()),
+            sprite_sheet_bundle: LdtkSpriteSheetBundle::default(),
+        }
+    }
 }
 
 #[derive(Default, Bundle, LdtkEntity)]
@@ -61,7 +83,6 @@ pub struct ColliderBundle {
 
 impl Default for ColliderBundle {
     fn default() -> Self {
-        println!("crateing collider");
         Self {
             int_cell_collider: Default::default(),
             transform: Transform::default(),
@@ -73,21 +94,43 @@ impl Default for ColliderBundle {
 struct IntCellCollider;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let mut camera = Camera2dBundle::default();
-    camera.projection.scale = (TILE_SIZE * TILE_MAP_SIZE / 2.0) / (WINDOW_SIZE);
-    camera.transform.translation.x = WINDOW_SIZE / 2.0 * camera.projection.scale;
-    camera.transform.translation.y = WINDOW_SIZE / 2.0 * camera.projection.scale;
-    commands.spawn(camera);
-
+    commands.spawn(Camera2dBundle::default());
     commands.spawn(LdtkWorldBundle {
         ldtk_handle: asset_server.load("map.ldtk"),
+        transform: Transform::default()
+            .with_scale(Vec3::new(
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                1.,
+            ))
+            .with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
         ..Default::default()
     });
 }
 
-fn init_added_collision(cells: Query<&GridCoords, Added<IntCellCollider>>) {
-    for coords in cells.iter() {
-        println!("{coords:?}");
+fn collision_tile_size() -> f32 {
+    TILE_SIZE * WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0) / 2.0
+}
+
+fn init_added_collision(
+    mut commands: Commands,
+    cells: Query<(Entity, &GridCoords), Added<IntCellCollider>>,
+) {
+    for (entity, coords) in cells.iter() {
+        commands.spawn((
+            RigidBody::Static,
+            // GravityScale(0.),
+            Collider::rectangle(collision_tile_size(), collision_tile_size()),
+            Transform::default().with_translation(Vec3::new(
+                (coords.x as f32 - TILE_MAP_SIZE / 2.0) * collision_tile_size()
+                    + collision_tile_size() / 2.0,
+                (coords.y as f32 - TILE_MAP_SIZE / 2.0) * collision_tile_size()
+                    + collision_tile_size() / 2.0,
+                0.0,
+            )),
+        ));
+
+        commands.get_entity(entity).map(|mut e| e.despawn());
     }
 }
 
