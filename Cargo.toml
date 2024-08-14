@@ -16,6 +16,7 @@ avian2d = { version = "0.1", default-features = false, features = [
   "parry-f32",
 ] }
 leafwing-input-manager = "0.15"
+bevy-inspector-egui = "0.25.2"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

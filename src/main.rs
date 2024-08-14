@@ -11,6 +11,7 @@ use bevy::{
 };
 use bevy_ecs_ldtk::prelude::*;
 
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use leafwing_input_manager::InputManagerBundle;
 use player::{
     input::PlayerActionSidescroller, movement::CharacterControllerBundle, Player, PlayerPlugin,
@@ -39,6 +40,7 @@ fn main() {
             PhysicsDebugPlugin::default(),
             LdtkPlugin,
         ))
+        .add_plugins(WorldInspectorPlugin::new())
         .register_ldtk_entity::<PlayerBundle>("Player")
         .register_ldtk_entity::<GoalBundle>("Goal")
         .register_ldtk_int_cell_for_layer::<ColliderBundle>("Collision", 1)
