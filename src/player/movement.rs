@@ -224,7 +224,7 @@ fn handle_jump(
                 let charge = charge + time.delta_seconds();
 
                 let released = action.just_released(&PlayerActionSidescroller::Jump);
-                let overcharged = charge >= 3.;
+                let overcharged = charge >= 1.;
 
                 if released {
                     *juice = JuiceMeter::Idle;
