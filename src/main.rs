@@ -24,6 +24,8 @@ const WINDOW_SIZE: f32 = 1000.0;
 const TILE_SIZE: f32 = 512.0;
 const TILE_MAP_SIZE: f32 = 16.0;
 
+const GRAVITY: f32 = 2048.;
+
 fn main() {
     App::new()
         .add_plugins((
@@ -47,7 +49,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, (close_on_escape, init_added_collision))
         .insert_resource(LevelSelection::index(0))
-        .insert_resource(Gravity(Vec2::NEG_Y * 8192.))
+        .insert_resource(Gravity(Vec2::NEG_Y * GRAVITY))
         .run();
 }
 
@@ -121,7 +123,6 @@ fn init_added_collision(
     for (entity, coords) in cells.iter() {
         commands.spawn((
             RigidBody::Static,
-            // GravityScale(0.),
             Collider::rectangle(collision_tile_size(), collision_tile_size()),
             Transform::default().with_translation(Vec3::new(
                 (coords.x as f32 - TILE_MAP_SIZE / 2.0) * collision_tile_size()
