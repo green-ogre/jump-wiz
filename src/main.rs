@@ -6,7 +6,8 @@ use avian2d::{
 };
 use bevy::{
     core_pipeline::bloom::{BloomCompositeMode, BloomPrefilterSettings, BloomSettings},
-    render::render_resource::FilterMode,
+    ecs::identifier::error,
+    render::{render_resource::FilterMode, view::RenderLayers},
 };
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
@@ -114,6 +115,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             ..Default::default()
         },
+        RenderLayers::layer(0),
         BloomSettings {
             intensity: 0.2,
             low_frequency_boost: 0.7,
@@ -126,6 +128,17 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             composite_mode: BloomCompositeMode::Additive,
         },
     ));
+    commands.spawn(LdtkWorldBundle {
+        ldtk_handle: asset_server.load("background.ldtk"),
+        transform: Transform::default()
+            .with_scale(Vec3::new(
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                1.,
+            ))
+            .with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
+        ..Default::default()
+    });
     commands.spawn(LdtkWorldBundle {
         ldtk_handle: asset_server.load("map.ldtk"),
         transform: Transform::default()
