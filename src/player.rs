@@ -1,5 +1,4 @@
-use avian2d::{collision::Collider, dynamics::rigid_body::RigidBody, schedule::PhysicsSet};
-use bevy::{math::VectorSpace, prelude::*};
+use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 pub mod input;
@@ -67,5 +66,5 @@ fn set_player_direction(mut player: Query<(&mut Transform, &LastDirection), With
         return;
     };
 
-    transform.scale.x = last_direction.0;
+    transform.scale.x = transform.scale.x.abs() * last_direction.0;
 }

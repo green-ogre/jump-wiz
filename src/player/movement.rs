@@ -1,16 +1,19 @@
+use super::{input::PlayerActionSidescroller, Player};
+use crate::GRAVITY;
 use avian2d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 use leafwing_input_manager::action_state::ActionState;
-
-use super::{input::PlayerActionSidescroller, Player};
 
 pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            PostUpdate,
-            (update_grounded, movement).chain().after(PhysicsSet::Sync),
+            FixedPreUpdate,
+            (update_grounded, movement)
+                .chain()
+                .before(PhysicsSet::Prepare)
+                .before(PhysicsSet::StepSimulation),
         );
     }
 }
@@ -54,11 +57,12 @@ pub struct CharacterControllerBundle {
     movement: MovementBundle,
     restitution: Restitution,
     friction: Friction,
+    margin: CollisionMargin,
 }
 
 impl Default for CharacterControllerBundle {
     fn default() -> Self {
-        Self::new(Collider::circle(128.))
+        Self::new(Collider::rectangle(128., 256.))
     }
 }
 
@@ -84,7 +88,7 @@ impl MovementBundle {
 
 impl Default for MovementBundle {
     fn default() -> Self {
-        Self::new(2f32.powi(10), 4096., PI * 0.45)
+        Self::new(GRAVITY * 0.2, GRAVITY * 0.65, PI * 0.45)
     }
 }
 
@@ -92,19 +96,21 @@ impl CharacterControllerBundle {
     pub fn new(collider: Collider) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 10);
+        caster_shape.set_scale(Vector::ONE * 0.48, 10);
 
         Self {
             character_controller: CharacterController,
             rigid_body: RigidBody::Dynamic,
             collider,
             ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0.0, Dir2::NEG_Y)
-                .with_max_time_of_impact(5.),
+                .with_max_time_of_impact(10.),
             locked_axes: LockedAxes::ROTATION_LOCKED,
             movement: MovementBundle::default(),
             restitution: Restitution::PERFECTLY_INELASTIC
                 .with_combine_rule(CoefficientCombine::Min),
             friction: Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+
+            margin: CollisionMargin(2.),
         }
     }
 
@@ -155,16 +161,28 @@ fn movement(
         &JumpImpulse,
         &mut LinearVelocity,
         &mut LastDirection,
+        &mut Transform,
         Has<Grounded>,
     )>,
     mut commands: Commands,
 ) {
-    let Ok(action) = action.get_single() else {
-        return;
+    let action = match action.get_single() {
+        Ok(action) => action,
+        Err(e) => {
+            warn!("Error moving player: {e:?}");
+            return;
+        }
     };
 
-    for (entity, speed, jump_impulse, mut linear_velocity, mut last_direction, is_grounded) in
-        &mut controllers
+    for (
+        entity,
+        speed,
+        jump_impulse,
+        mut linear_velocity,
+        mut last_direction,
+        mut transform,
+        is_grounded,
+    ) in &mut controllers
     {
         let value = action.axis_data(&PlayerActionSidescroller::Move).unwrap();
 
@@ -179,13 +197,15 @@ fn movement(
             } else {
                 linear_velocity.x = 0.;
             }
+
+            linear_velocity.y = linear_velocity.y.max(0.);
         }
 
         if is_grounded {
             if action.just_pressed(&PlayerActionSidescroller::Jump) {
                 linear_velocity.x = jump_impulse.0 * last_direction.0 * 0.5;
                 linear_velocity.y = jump_impulse.0;
-                // commands.entity(entity).remove::<Grounded>();
+                transform.translation.y += 10.;
             }
         }
     }
