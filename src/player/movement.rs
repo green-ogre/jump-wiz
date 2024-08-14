@@ -10,7 +10,7 @@ impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedPreUpdate,
-            (update_grounded, movement, handle_jump)
+            (update_grounded, movement, handle_jump, handle_elasticity)
                 .chain()
                 .before(PhysicsSet::Prepare)
                 .before(PhysicsSet::StepSimulation),
@@ -157,6 +157,7 @@ fn movement(
     action: Query<&ActionState<PlayerActionSidescroller>, With<Player>>,
     mut controllers: Query<(
         &MovementSpeed,
+        &JuiceMeter,
         &mut LinearVelocity,
         &mut LastDirection,
         &mut Transform,
@@ -167,14 +168,17 @@ fn movement(
         return;
     };
 
-    for (speed, mut linear_velocity, mut last_direction, mut transform, is_grounded) in
+    for (speed, juice, mut linear_velocity, mut last_direction, mut transform, is_grounded) in
         &mut controllers
     {
         let value = action.axis_data(&PlayerActionSidescroller::Move).unwrap();
 
         // jump king controls
+
         if is_grounded {
-            if value.value > 0.2 {
+            if matches!(juice, JuiceMeter::Charging(_)) {
+                linear_velocity.x = 0.;
+            } else if value.value > 0.2 {
                 last_direction.0 = 1.;
                 linear_velocity.x = speed.0;
             } else if value.value < -0.2 {
@@ -249,5 +253,15 @@ fn handle_jump(
                 }
             }
         };
+    }
+}
+
+fn handle_elasticity(mut controllers: Query<(&LinearVelocity, &mut Restitution, Has<Grounded>)>) {
+    for (velocity, mut rest, is_grounded) in controllers.iter_mut() {
+        if !is_grounded && velocity.y > 100. {
+            *rest = Restitution::PERFECTLY_ELASTIC;
+        } else {
+            *rest = Restitution::PERFECTLY_INELASTIC;
+        }
     }
 }
