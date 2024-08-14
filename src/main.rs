@@ -23,11 +23,45 @@ fn main() {
                 }),
         )
         .add_plugins(LdtkPlugin)
+        .register_ldtk_entity::<PlayerBundle>("Player")
+        .register_ldtk_entity::<GoalBundle>("Goal")
+        .register_ldtk_int_cell_for_layer::<ColliderBundle>("Collision", 1)
         .add_systems(Startup, setup)
-        .add_systems(Update, close_on_escape)
+        .add_systems(Update, (close_on_escape, init_added_collision))
         .insert_resource(LevelSelection::index(0))
         .run();
 }
+
+#[derive(Default, Bundle, LdtkEntity)]
+struct PlayerBundle {
+    #[sprite_sheet_bundle]
+    sprite_sheet_bundle: LdtkSpriteSheetBundle,
+}
+
+#[derive(Default, Bundle, LdtkEntity)]
+struct GoalBundle {
+    #[sprite_sheet_bundle]
+    sprite_sheet_bundle: LdtkSpriteSheetBundle,
+}
+
+#[derive(Clone, Bundle, LdtkIntCell)]
+pub struct ColliderBundle {
+    int_cell_collider: IntCellCollider,
+    transform: Transform,
+}
+
+impl Default for ColliderBundle {
+    fn default() -> Self {
+        println!("crateing collider");
+        Self {
+            int_cell_collider: Default::default(),
+            transform: Transform::default(),
+        }
+    }
+}
+
+#[derive(Default, Clone, Component)]
+struct IntCellCollider;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = Camera2dBundle::default();
@@ -40,6 +74,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ldtk_handle: asset_server.load("map.ldtk"),
         ..Default::default()
     });
+}
+
+fn init_added_collision(cells: Query<&GridCoords, Added<IntCellCollider>>) {
+    for coords in cells.iter() {
+        println!("{coords:?}");
+    }
 }
 
 fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWriter<AppExit>) {
