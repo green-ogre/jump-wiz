@@ -5,12 +5,16 @@ use avian2d::{
     PhysicsPlugins,
 };
 use bevy::{
+    core_pipeline::bloom::{BloomCompositeMode, BloomPrefilterSettings, BloomSettings},
+    render::render_resource::FilterMode,
+};
+use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
     window::WindowResolution,
 };
 use bevy_ecs_ldtk::prelude::*;
-
+use bevy_hanabi::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use leafwing_input_manager::InputManagerBundle;
 use player::{
@@ -27,24 +31,28 @@ const TILE_MAP_SIZE: f32 = 16.0;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "jump wiz".into(),
-                    resolution: WindowResolution::new(WINDOW_SIZE, WINDOW_SIZE),
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "jump wiz".into(),
+                        resolution: WindowResolution::new(WINDOW_SIZE, WINDOW_SIZE),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            }),
+                })
+                .set(ImagePlugin::default_nearest()),
             PhysicsPlugins::default(),
             PlayerPlugin,
-            PhysicsDebugPlugin::default(),
+            // PhysicsDebugPlugin::default(),
             LdtkPlugin,
+            HanabiPlugin,
+            WorldInspectorPlugin::new(),
         ))
-        .add_plugins(WorldInspectorPlugin::new())
+        .insert_resource(Msaa::Off)
         .register_ldtk_entity::<PlayerBundle>("Player")
         .register_ldtk_entity::<GoalBundle>("Goal")
         .register_ldtk_int_cell_for_layer::<ColliderBundle>("Collision", 1)
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, setup_effect))
         .add_systems(Update, (close_on_escape, init_added_collision))
         .insert_resource(LevelSelection::index(0))
         .insert_resource(Gravity(Vec2::NEG_Y * 8192.))
@@ -96,7 +104,26 @@ impl Default for ColliderBundle {
 struct IntCellCollider;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                hdr: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        BloomSettings {
+            intensity: 0.2,
+            low_frequency_boost: 0.7,
+            low_frequency_boost_curvature: 0.95,
+            high_pass_frequency: 1.0,
+            prefilter_settings: BloomPrefilterSettings {
+                threshold: 0.4,
+                threshold_softness: 0.2,
+            },
+            composite_mode: BloomCompositeMode::Additive,
+        },
+    ));
     commands.spawn(LdtkWorldBundle {
         ldtk_handle: asset_server.load("map.ldtk"),
         transform: Transform::default()
@@ -150,4 +177,70 @@ fn close_on_escape(mut input: EventReader<KeyboardInput>, mut writer: EventWrite
             writer.send(AppExit::Success);
         }
     }
+}
+
+fn setup_effect(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
+    // Define a color gradient from red to transparent black
+    let mut gradient = Gradient::new();
+    gradient.add_key(0.0, Vec4::new(1., 0., 0., 1.));
+    gradient.add_key(1.0, Vec4::splat(0.));
+
+    // Create a new expression module
+    let mut module = Module::default();
+
+    // On spawn, randomly initialize the position of the particle
+    // to be over the surface of a sphere of radius 2 units.
+    let init_pos = SetPositionSphereModifier {
+        center: module.lit(Vec3::ZERO),
+        radius: module.lit(0.05),
+        dimension: ShapeDimension::Surface,
+    };
+
+    // Also initialize a radial initial velocity to 6 units/sec
+    // away from the (same) sphere center.
+    let init_vel = SetVelocitySphereModifier {
+        center: module.lit(Vec3::ZERO),
+        speed: module.lit(6.),
+    };
+
+    let init_size = SetSizeModifier::default();
+
+    // Initialize the total lifetime of the particle, that is
+    // the time for which it's simulated and rendered. This modifier
+    // is almost always required, otherwise the particles won't show.
+    let lifetime = module.lit(10.); // literal value "10.0"
+    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+
+    // Every frame, add a gravity-like acceleration downward
+    let accel = module.lit(Vec3::new(0., -3., 0.));
+    let update_accel = AccelModifier::new(accel);
+
+    // Create the effect asset
+    let effect = EffectAsset::new(
+        // Maximum number of particles alive at a time
+        vec![32768],
+        // Spawn at a rate of 5 particles per second
+        Spawner::rate(5.0.into()),
+        // Move the expression module into the asset
+        module,
+    )
+    .with_name("MyEffect")
+    .init(init_pos)
+    .init(init_vel)
+    .init(init_lifetime)
+    .update(update_accel)
+    .render(init_size)
+    // Render the particles with a color gradient over their
+    // lifetime. This maps the gradient key 0 to the particle spawn
+    // time, and the gradient key 1 to the particle death (10s).
+    .render(ColorOverLifetimeModifier { gradient });
+
+    // Insert into the asset system
+    let effect_asset = effects.add(effect);
+
+    commands.spawn(ParticleEffectBundle {
+        effect: ParticleEffect::new(effect_asset),
+        transform: Transform::from_translation(Vec3::Y).with_scale(Vec3::splat(5.)),
+        ..Default::default()
+    });
 }
