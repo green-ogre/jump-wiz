@@ -1,0 +1,25 @@
+[package]
+name = "maze-lite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.14.1", features = ["dynamic_linking"] }
+bevy_ecs_tilemap = "0.14.0"
+rand = "0.8.5"
+avian2d = { version = "0.1", default-features = false, features = [
+  "2d",
+  "bevy_scene",
+  "debug-plugin",
+  "f32",
+  "parry-f32",
+] }
+leafwing-input-manager = "0.15"
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 0
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3
