@@ -113,6 +113,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Camera2dBundle {
             camera: Camera {
                 hdr: true,
+                order: 0,
+                clear_color: bevy::render::prelude::ClearColorConfig::None,
                 ..Default::default()
             },
             ..Default::default()
@@ -129,6 +131,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             composite_mode: BloomCompositeMode::Additive,
         },
+        RenderLayers::layer(0),
     ));
     commands.spawn(LdtkWorldBundle {
         ldtk_handle: asset_server.load("background.ldtk"),
@@ -141,17 +144,89 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             .with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
         ..Default::default()
     });
-    commands.spawn(LdtkWorldBundle {
-        ldtk_handle: asset_server.load("map.ldtk"),
-        transform: Transform::default()
-            .with_scale(Vec3::new(
+    commands.spawn((
+        LdtkWorldBundle {
+            ldtk_handle: asset_server.load_with_settings(
+                "map.ldtk",
+                |settings: &mut LdtkSettings| {
+                    settings.set_clear_color = SetClearColor::No;
+                    settings.level_background = LevelBackground::Nonexistent;
+                },
+            ),
+            transform: Transform::default()
+                .with_scale(Vec3::new(
+                    WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                    WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                    1.,
+                ))
+                .with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
+            ..Default::default()
+        },
+        RenderLayers::layer(0),
+    ));
+
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                hdr: true,
+                order: -1,
+                clear_color: bevy::render::prelude::ClearColorConfig::None,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        BloomSettings {
+            intensity: 0.2,
+            low_frequency_boost: 0.7,
+            low_frequency_boost_curvature: 0.95,
+            high_pass_frequency: 1.0,
+            prefilter_settings: BloomPrefilterSettings {
+                threshold: 0.4,
+                threshold_softness: 0.2,
+            },
+            composite_mode: BloomCompositeMode::Additive,
+        },
+        RenderLayers::layer(1),
+    ));
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform::default().with_scale(Vec3::new(
                 WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
                 WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
                 1.,
-            ))
-            .with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
-        ..Default::default()
-    });
+            )),
+            //.with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
+            texture: asset_server.load("background/simplified/Level_0/Walls2.png"),
+            ..Default::default()
+        },
+        RenderLayers::layer(1),
+    ));
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform::default().with_scale(Vec3::new(
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                1.,
+            )),
+            //.with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
+            texture: asset_server.load("background/simplified/Level_0/Background_decor2.png"),
+            ..Default::default()
+        },
+        RenderLayers::layer(1),
+    ));
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform::default().with_scale(Vec3::new(
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                WINDOW_SIZE / (TILE_SIZE * TILE_MAP_SIZE / 2.0),
+                1.,
+            )),
+            //.with_translation(Vec3::new(-WINDOW_SIZE / 2.0, -WINDOW_SIZE / 2.0, 0.0)),
+            texture: asset_server.load("background/simplified/Level_0/Plants2.png"),
+            ..Default::default()
+        },
+        RenderLayers::layer(1),
+    ));
 }
 
 fn collision_tile_size() -> f32 {
