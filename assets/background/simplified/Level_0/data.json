@@ -1,0 +1,36 @@
+{
+	"identifier": "Level_0",
+	"uniqueIdentifer": "6c40d8f0-4ce0-11ef-90de-c34e1667463f",
+	"x": -1,
+	"y": -1,
+	"width": 4096,
+	"height": 4096,
+	"bgColor": "#696A79",
+	"neighbourLevels": [],
+	"customFields" : {},
+	"layers": [
+		"Plants2.png",
+		"Walls2.png",
+		"Background_decor2.png",
+		"Background_tiles.png",
+		"Plants.png",
+		"Background_decor.png",
+		"Walls.png",
+		"Foregroung_decor.png"
+	],
+	"entities": {
+		"Player": [
+			{
+				"id": "Player",
+				"iid": "ca87f8b0-4ce0-11ef-9301-599e767913fb",
+				"layer": "Entities",
+				"x": 3072,
+				"y": 2560,
+				"width": 1024,
+				"height": 1024,
+				"color": 12470831,
+				"customFields" : {}
+			}
+		]
+	}
+}
